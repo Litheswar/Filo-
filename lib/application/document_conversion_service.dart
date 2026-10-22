@@ -4,6 +4,7 @@ import 'dart:math';
 import '../models/conversion_job.dart';
 import '../models/conversion_type.dart';
 import '../services/platform/file_picker_service.dart';
+import 'file_manager.dart';
 import 'conversion_workflow.dart';
 
 enum DocumentConversionStatus {
@@ -105,11 +106,13 @@ class DocumentConversionService {
           selectedPaths.any((path) => !availablePaths.contains(path))) {
         throw const FormatException('Invalid staged input selection.');
       }
+      final effectiveRequestedOutputName =
+          requestedOutputName ?? _defaultOutputName(selection, selectedPaths);
       final job = ConversionJob(
         id: _jobIdGenerator(),
         inputPaths: selectedPaths,
         conversionType: selection.conversionType,
-        requestedOutputName: requestedOutputName,
+        requestedOutputName: effectiveRequestedOutputName,
         outputDirectory: effectiveOutputDirectory,
       );
       workflowOutcome = await conversionWorkflow.run(job);
@@ -160,6 +163,18 @@ class DocumentConversionService {
       errorDescription: workflowOutcome.errorMessage,
       cleanupWarning: cleanupWarning,
     );
+  }
+
+  String? _defaultOutputName(
+    PickedInputSelection selection,
+    List<String> orderedPaths,
+  ) {
+    if (selection.conversionType != ConversionType.pdfMerge) return null;
+    final firstInput = selection.files.firstWhere(
+      (file) => file.path == orderedPaths.first,
+    );
+    final baseName = BaseFileManager().extractBaseName(firstInput.name);
+    return '${baseName}_merged.pdf';
   }
 
   static String _newJobId() =>

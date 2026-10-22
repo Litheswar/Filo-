@@ -453,27 +453,34 @@ void main() {
     final first = await _pdfBytes('MERGE_FIRST');
     final second = await _pdfBytes('MERGE_SECOND');
     pickerAdapter.sources = [
-      source('first.pdf', first),
-      source('second.pdf', second),
+      source('03-gamma.pdf', first),
+      source('02-alpha.pdf', second),
     ];
 
-    final outcome = await service(converters: [PdfMerger()])
-        .convert(ConversionType.pdfMerge);
+    final conversion = service(converters: [PdfMerger()]);
+    final selected = await conversion.selectInputs(ConversionType.pdfMerge);
+    expect(selected.isSelected, isTrue);
+    final selection = selected.selection!;
+    final outcome = await conversion.convertSelection(
+      selection,
+      inputPaths: [selection.files[1].path, selection.files[0].path],
+    );
 
     expect(outcome.status, DocumentConversionStatus.success);
     final record = outcome.workflowOutcome!.documents.single;
     expect(record.extension, 'pdf');
-    expect(record.fileName, endsWith('first_merged.pdf'));
+    expect(record.fileName, '02-alpha_merged.pdf');
+    expect(File(record.localPath).uri.pathSegments.last, record.fileName);
     final stored = await pdfrx.PdfDocument.openFile(record.localPath);
     try {
       expect(stored.pages, hasLength(2));
       expect(
         (await stored.pages[0].loadStructuredText()).fullText,
-        contains('MERGE_FIRST'),
+        contains('MERGE_SECOND'),
       );
       expect(
         (await stored.pages[1].loadStructuredText()).fullText,
-        contains('MERGE_SECOND'),
+        contains('MERGE_FIRST'),
       );
     } finally {
       await stored.dispose();
@@ -483,6 +490,7 @@ void main() {
     expect(history.single.isSuccess, isTrue);
     expect(history.single.conversionType, ConversionType.pdfMerge);
     expect(history.single.outputName, record.fileName);
+    expect((await library.getDocuments()).single.fileName, record.fileName);
   });
 
   test('cancellation, conversion failure, and persistence failure clean staged inputs', () async {

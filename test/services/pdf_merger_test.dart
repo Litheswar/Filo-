@@ -32,6 +32,8 @@ void main() {
       final second = await _writePdf(directory, 'second.pdf', [
         _PageFixture('THIRD_PAGE', PdfPageFormat.a4.landscape),
       ]);
+      final firstBytes = await first.readAsBytes();
+      final secondBytes = await second.readAsBytes();
 
       final result = await _merge(merger, directory, [first.path, second.path]);
 
@@ -46,8 +48,8 @@ void main() {
       ]);
       expect(pages[0].width, closeTo(595.28, 1));
       expect(pages[2].width, greaterThan(pages[2].height));
-      expect(await first.readAsBytes(), isNotEmpty);
-      expect(await second.readAsBytes(), isNotEmpty);
+      expect(await first.readAsBytes(), firstBytes);
+      expect(await second.readAsBytes(), secondBytes);
     },
   );
 
@@ -126,6 +128,23 @@ void main() {
       expect(await existing.readAsString(), 'keep this file');
     },
   );
+
+  test('numbers collisions for the default merged filename', () async {
+    final first = await _writePdf(directory, '03-gamma.pdf', [
+      _PageFixture('FIRST'),
+    ]);
+    final second = await _writePdf(directory, 'second.pdf', [
+      _PageFixture('SECOND'),
+    ]);
+    final existing = File('${directory.path}/03-gamma_merged.pdf')
+      ..writeAsStringSync('preserve existing output');
+
+    final result = await _merge(merger, directory, [first.path, second.path]);
+
+    expect(result.isSuccess, isTrue, reason: result.errorMessage);
+    expect(result.outputPath, endsWith('03-gamma_merged_1.pdf'));
+    expect(await existing.readAsString(), 'preserve existing output');
+  });
 
   test('removes an incomplete output after a write failure', () async {
     final first = await _writePdf(directory, 'first.pdf', [
