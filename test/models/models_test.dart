@@ -6,8 +6,8 @@ import 'package:filo/models/conversion_result.dart';
 
 void main() {
   group('ConversionType', () {
-    test('contains all 7 required conversion types', () {
-      expect(ConversionType.values, hasLength(7));
+    test('contains the supported conversion types', () {
+      expect(ConversionType.values, hasLength(8));
       expect(
         ConversionType.values,
         containsAll([
@@ -18,6 +18,7 @@ void main() {
           ConversionType.pdfToImages,
           ConversionType.txtToPdf,
           ConversionType.pdfToTxt,
+          ConversionType.pdfMerge,
         ]),
       );
     });
@@ -33,9 +34,14 @@ void main() {
       expect(ConversionType.multipleImagesToPdf.defaultOutputExtension, 'pdf');
       expect(ConversionType.txtToPdf.defaultOutputExtension, 'pdf');
       expect(ConversionType.pdfToTxt.defaultOutputExtension, 'txt');
+      expect(ConversionType.pdfMerge.displayName, 'Merge PDFs');
+      expect(ConversionType.pdfMerge.defaultOutputExtension, 'pdf');
       expect(ConversionType.pdfToImages.defaultOutputExtension, 'png');
 
       expect(ConversionType.multipleImagesToPdf.requiresMultipleInputs, isTrue);
+      expect(ConversionType.multipleImagesToPdf.minimumInputCount, 2);
+      expect(ConversionType.pdfMerge.requiresMultipleInputs, isTrue);
+      expect(ConversionType.pdfMerge.minimumInputCount, 2);
       expect(ConversionType.singleImageToPdf.requiresMultipleInputs, isFalse);
     });
   });
@@ -177,6 +183,23 @@ void main() {
 
       expect(job.inputPaths.length, 3);
       expect(job.primaryInputPath, '/storage/page1.jpg');
+    });
+
+    test('requires two PDF inputs for a merge job', () {
+      expect(
+        () => ConversionJob(
+          id: 'merge-one',
+          inputPaths: ['/one.pdf'],
+          conversionType: ConversionType.pdfMerge,
+        ),
+        throwsArgumentError,
+      );
+      final job = ConversionJob(
+        id: 'merge-two',
+        inputPaths: ['/one.pdf', '/two.pdf'],
+        conversionType: ConversionType.pdfMerge,
+      );
+      expect(job.inputPaths, ['/one.pdf', '/two.pdf']);
     });
 
     test('rejects multiple inputs for single-input conversion types', () {

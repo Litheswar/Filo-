@@ -148,6 +148,9 @@ void main() {
     expect(FilePickerService.supportedExtensionsFor(ConversionType.pdfToTxt), [
       'pdf',
     ]);
+    expect(FilePickerService.supportedExtensionsFor(ConversionType.pdfMerge), [
+      'pdf',
+    ]);
   });
 
   test('cancellation is distinct from failure and creates no files', () async {
@@ -222,6 +225,46 @@ void main() {
             .status,
         FileSelectionStatus.failure,
       );
+      final onePdf = await service(
+        _FakePicker(
+          multiple: [
+            source('one.pdf', [37, 80, 68, 70, 45, 49]),
+          ],
+        ),
+      ).selectMultiple(ConversionType.pdfMerge);
+      expect(onePdf.status, FileSelectionStatus.failure);
+      expect(onePdf.errorDescription, contains('at least two'));
+      final oneImage = await service(
+        _FakePicker(
+          multiple: [
+            source('one.jpg', [0xff, 0xd8, 0xff]),
+          ],
+        ),
+      ).selectMultiple(ConversionType.multipleImagesToPdf);
+      expect(oneImage.status, FileSelectionStatus.failure);
+      expect(oneImage.errorDescription, contains('at least two images'));
+    },
+  );
+
+  test(
+    'PDF merge staging validates and preserves the selected PDF order',
+    () async {
+      final picker = _FakePicker(
+        multiple: [
+          source('first.pdf', [37, 80, 68, 70, 45, 49, 1]),
+          source('second.pdf', [37, 80, 68, 70, 45, 49, 2]),
+        ],
+      );
+      final result = await service(picker)
+          .selectMultiple(ConversionType.pdfMerge);
+
+      expect(result.isSelected, isTrue);
+      expect(picker.requestedExtensions, ['pdf']);
+      expect(result.selection!.files.map((file) => file.name), [
+        'first.pdf',
+        'second.pdf',
+      ]);
+      await result.selection!.dispose();
     },
   );
 }

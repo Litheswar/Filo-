@@ -58,13 +58,14 @@ void main() {
   ActivityRecord activity({
     required String id,
     required DateTime timestamp,
+    ConversionType conversionType = ConversionType.pdfToTxt,
     bool success = true,
     String? outputPath,
     String? errorMessage,
   }) => ActivityRecord(
     id: id,
     jobId: 'job-$id',
-    conversionType: ConversionType.pdfToTxt,
+    conversionType: conversionType,
     isSuccess: success,
     outputPath: outputPath,
     errorMessage: errorMessage,
@@ -223,10 +224,19 @@ void main() {
           errorMessage: r'Could not read C:\private\secret.pdf: denied',
         ),
       );
+      await activities.logActivity(
+        activity(
+          id: 'merged',
+          conversionType: ConversionType.pdfMerge,
+          timestamp: DateTime.utc(2025, 1, 3),
+          outputPath: '/private/merged.pdf',
+        ),
+      );
 
       final records = await activities.getActivities();
-      expect(records.map((item) => item.id), ['failed', 'older']);
-      expect(records.first.errorMessage, contains('[path]'));
+      expect(records.map((item) => item.id), ['merged', 'failed', 'older']);
+      expect(records.first.conversionType, ConversionType.pdfMerge);
+      expect(records[1].errorMessage, contains('[path]'));
       expect(records.last.outputName, 'secret.txt');
       expect(records.last.outputPath, isNull);
       final raw = await (await localDatabase.getDatabase()).query('activities');

@@ -135,6 +135,44 @@ void main() {
     },
   );
 
+  testWidgets('PDF merge lets users reorder and remove selected files', (
+    tester,
+  ) async {
+    await _chooseFiles(tester, services, ConversionType.pdfMerge);
+    expect(find.text('first.pdf'), findsOneWidget);
+    expect(find.text('second.pdf'), findsOneWidget);
+    expect(pickerAdapter.requestedExtensions, ['pdf']);
+
+    await tester.tap(find.byTooltip('Move second.pdf up'));
+    await tester.pumpAndSettle();
+    await _show(tester, find.text('Convert and save'));
+    await tester.tap(find.text('Convert and save'));
+    await tester.pumpAndSettle();
+    expect(conversionService.lastInputPaths, [
+      contains('second.pdf'),
+      contains('first.pdf'),
+    ]);
+  });
+
+  testWidgets('PDF merge prevents conversion after removing below two files', (
+    tester,
+  ) async {
+    await _chooseFiles(tester, services, ConversionType.pdfMerge);
+    await tester.tap(find.byTooltip('Remove first.pdf'));
+    await tester.pumpAndSettle();
+    expect(find.text('first.pdf'), findsNothing);
+    expect(find.text('second.pdf'), findsOneWidget);
+
+    await _show(tester, find.text('Convert and save'));
+    await tester.tap(find.text('Convert and save'));
+    await tester.pumpAndSettle();
+    expect(conversionService.convertCount, 0);
+    expect(
+      find.text('Keep at least two PDF files selected to merge.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('picker cancellation is distinct and does not run conversion', (
     tester,
   ) async {
@@ -544,6 +582,12 @@ class _FakePicker implements FilePickerAdapter {
       cancelNext = false;
       return null;
     }
+    if (allowedExtensions.contains('pdf')) {
+      return [
+        _source('first.pdf', _bytesFor('pdf')),
+        _source('second.pdf', _bytesFor('pdf')),
+      ];
+    }
     return [
       _source('first.png', _bytesFor('png')),
       _source('second.jpg', _bytesFor('jpg')),
@@ -574,6 +618,7 @@ class _FakeDocumentConversionService extends DocumentConversionService {
   final List<ConversionType> selectedTypes = [];
   DocumentConversionOutcome? nextOutcome;
   Completer<DocumentConversionOutcome>? conversionGate;
+  List<String>? lastInputPaths;
 
   @override
   Future<FileSelectionResult> selectInputs(
@@ -587,10 +632,12 @@ class _FakeDocumentConversionService extends DocumentConversionService {
   @override
   Future<DocumentConversionOutcome> convertSelection(
     PickedInputSelection selection, {
+    List<String>? inputPaths,
     String? requestedOutputName,
     String? outputDirectory,
   }) {
     convertCount++;
+    lastInputPaths = inputPaths ?? selection.inputPaths;
     final gate = conversionGate;
     if (gate != null) return gate.future;
     final result = nextOutcome ?? _success([_record('converted.png')]);

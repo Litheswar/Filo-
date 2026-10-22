@@ -29,6 +29,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
   late final List<ConversionType> _availableTypes;
   ConversionType? _selectedType;
   PickedInputSelection? _selection;
+  List<PickedInputFile> _orderedSelection = [];
   DocumentConversionOutcome? _outcome;
   String? _selectionError;
   String? _actionMessage;
@@ -144,22 +145,26 @@ class _ConvertScreenState extends State<ConvertScreen> {
             _SectionLabel(
               title: 'Choose files',
               detail: type.requiresMultipleInputs
-                  ? 'Select multiple images'
+                  ? type == ConversionType.pdfMerge
+                        ? 'Select at least two PDFs'
+                        : 'Select multiple images'
                   : 'One file',
             ),
             const SizedBox(height: FiloSpacing.xs),
             Text(
               selection == null
                   ? _selectionGuidance(type)
-                  : '${selection.files.length} ${selection.files.length == 1 ? 'file' : 'files'} selected',
+                  : '${_orderedSelection.length} ${_orderedSelection.length == 1 ? 'file' : 'files'} selected',
             ),
             if (selection != null) ...[
               const SizedBox(height: FiloSpacing.sm),
-              ...selection.files.map(
-                (file) => Padding(
+              ..._orderedSelection.indexed.map((entry) {
+                final (index, file) = entry;
+                return Padding(
                   padding: const EdgeInsets.only(top: FiloSpacing.xs),
                   child: Row(
                     children: [
+                      SizedBox(width: 24, child: Text('${index + 1}.')),
                       const Icon(Icons.insert_drive_file_outlined, size: 20),
                       const SizedBox(width: FiloSpacing.sm),
                       Expanded(
@@ -169,10 +174,37 @@ class _ConvertScreenState extends State<ConvertScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (type == ConversionType.pdfMerge) ...[
+                        IconButton(
+                          tooltip: 'Move ${file.name} up',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: running || index == 0
+                              ? null
+                              : () => _moveSelectedFile(index, index - 1),
+                          icon: const Icon(Icons.arrow_upward_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Move ${file.name} down',
+                          visualDensity: VisualDensity.compact,
+                          onPressed:
+                              running || index == _orderedSelection.length - 1
+                              ? null
+                              : () => _moveSelectedFile(index, index + 1),
+                          icon: const Icon(Icons.arrow_downward_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove ${file.name}',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: running
+                              ? null
+                              : () => _removeSelectedFile(index),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
                     ],
                   ),
-                ),
-              ),
+                );
+              }),
             ],
             const SizedBox(height: FiloSpacing.md),
             SizedBox(
@@ -335,6 +367,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
     setState(() {
       _selectedType = type;
       _selection = null;
+      _orderedSelection = [];
       _outcome = null;
       _selectionError = null;
       _actionMessage = null;
@@ -432,6 +465,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
       _isPicking = false;
       if (result.isSelected && result.selection != null) {
         _selection = result.selection;
+        _orderedSelection = List.of(result.selection!.files);
         _outcome = null;
       } else if (result.isCancelled) {
         _actionMessage = 'No file was selected.';
@@ -446,6 +480,17 @@ class _ConvertScreenState extends State<ConvertScreen> {
   Future<void> _convert() async {
     final selection = _selection;
     if (selection == null || _isPicking || _isConverting) return;
+    if (_orderedSelection.length < selection.conversionType.minimumInputCount) {
+      setState(() {
+        _selectionError = selection.conversionType == ConversionType.pdfMerge
+            ? 'Keep at least two PDF files selected to merge.'
+            : 'Keep at least two images selected to create a PDF.';
+      });
+      return;
+    }
+    final inputPaths = List<String>.unmodifiable(
+      _orderedSelection.map((file) => file.path),
+    );
     setState(() {
       _isConverting = true;
       _selection = null;
@@ -455,7 +500,12 @@ class _ConvertScreenState extends State<ConvertScreen> {
     });
     try {
       final result = await widget.services.documentConversionService
-          .convertSelection(selection);
+          .convertSelection(
+            selection,
+            inputPaths: selection.conversionType.requiresMultipleInputs
+                ? inputPaths
+                : null,
+          );
       if (!mounted) return;
       setState(() {
         _isConverting = false;
@@ -472,6 +522,28 @@ class _ConvertScreenState extends State<ConvertScreen> {
         );
       });
     }
+  }
+
+  void _moveSelectedFile(int from, int to) {
+    if (from < 0 ||
+        to < 0 ||
+        from >= _orderedSelection.length ||
+        to >= _orderedSelection.length) {
+      return;
+    }
+    setState(() {
+      final file = _orderedSelection.removeAt(from);
+      _orderedSelection.insert(to, file);
+      _selectionError = null;
+    });
+  }
+
+  void _removeSelectedFile(int index) {
+    if (index < 0 || index >= _orderedSelection.length) return;
+    setState(() {
+      _orderedSelection.removeAt(index);
+      _selectionError = null;
+    });
   }
 
   Future<void> _export(FileRecord record) async {
@@ -552,7 +624,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
   }
 
   String _selectionGuidance(ConversionType type) => type.requiresMultipleInputs
-      ? 'Choose two or more JPG or PNG images. Their picker order becomes the PDF page order.'
+      ? type == ConversionType.pdfMerge
+            ? 'Choose two or more PDFs. You can change their order before merging.'
+            : 'Choose two or more JPG or PNG images. Their picker order becomes the PDF page order.'
       : 'Choose one ${_acceptedFormat(type)} file. It will be copied into temporary app storage before conversion.';
 
   String _acceptedFormat(ConversionType type) => switch (type) {
@@ -560,7 +634,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
     ConversionType.pngToJpg => 'PNG',
     ConversionType.singleImageToPdf => 'JPG or PNG image',
     ConversionType.multipleImagesToPdf => 'JPG or PNG image',
-    ConversionType.pdfToImages || ConversionType.pdfToTxt => 'PDF',
+    ConversionType.pdfToImages ||
+    ConversionType.pdfToTxt ||
+    ConversionType.pdfMerge => 'PDF',
     ConversionType.txtToPdf => 'TXT',
   };
 
@@ -700,6 +776,7 @@ class _ConversionChoice extends StatelessWidget {
     ConversionType.singleImageToPdf ||
     ConversionType.multipleImagesToPdf => Icons.picture_as_pdf_outlined,
     ConversionType.pdfToImages => Icons.photo_library_outlined,
+    ConversionType.pdfMerge => Icons.merge_type_rounded,
     ConversionType.txtToPdf => Icons.description_outlined,
     ConversionType.pdfToTxt => Icons.text_snippet_outlined,
   };
@@ -710,6 +787,7 @@ class _ConversionChoice extends StatelessWidget {
     ConversionType.singleImageToPdf => 'Create a PDF from one image.',
     ConversionType.multipleImagesToPdf => 'Combine images into a PDF.',
     ConversionType.pdfToImages => 'Render each PDF page as an image.',
+    ConversionType.pdfMerge => 'Combine two or more PDFs in your chosen order.',
     ConversionType.txtToPdf => 'Turn a text file into a PDF.',
     ConversionType.pdfToTxt => 'Extract selectable text from a PDF.',
   };

@@ -270,6 +270,7 @@ String _conversionLabel(ConversionType type) => switch (type) {
   ConversionType.pdfToImages => 'PDF to images',
   ConversionType.txtToPdf => 'Text to PDF',
   ConversionType.pdfToTxt => 'PDF to text',
+  ConversionType.pdfMerge => 'Merge PDFs',
 };
 
 String _formatTimestamp(DateTime value) {

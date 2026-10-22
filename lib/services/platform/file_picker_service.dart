@@ -149,13 +149,17 @@ class FilePickerService {
         ConversionType.singleImageToPdf ||
         ConversionType.multipleImagesToPdf => const ['jpg', 'jpeg', 'png'],
         ConversionType.txtToPdf => const ['txt'],
-        ConversionType.pdfToImages || ConversionType.pdfToTxt => const ['pdf'],
+        ConversionType.pdfToImages ||
+        ConversionType.pdfToTxt ||
+        ConversionType.pdfMerge => const ['pdf'],
       };
 
   Future<FileSelectionResult> selectSingle(ConversionType type) async {
     if (type.requiresMultipleInputs) {
-      return const FileSelectionResult.failure(
-        'This conversion requires selecting multiple images.',
+      return FileSelectionResult.failure(
+        type == ConversionType.pdfMerge
+            ? 'This conversion requires selecting multiple PDF files.'
+            : 'This conversion requires selecting multiple images.',
       );
     }
     try {
@@ -180,6 +184,13 @@ class FilePickerService {
       if (sources == null || sources.isEmpty) {
         return const FileSelectionResult.cancelled();
       }
+      if (sources.length < type.minimumInputCount) {
+        return FileSelectionResult.failure(
+          type == ConversionType.pdfMerge
+              ? 'Select at least two PDF files to merge.'
+              : 'Select at least two images to create a PDF.',
+        );
+      }
       return FileSelectionResult.selected(await _stageSources(type, sources));
     } catch (_) {
       return const FileSelectionResult.failure(
@@ -195,7 +206,9 @@ class FilePickerService {
     ConversionType type,
     List<PickerFileSource> sources,
   ) async {
-    if (sources.isEmpty) throw const _InvalidSelection();
+    if (sources.length < type.minimumInputCount) {
+      throw const _InvalidSelection();
+    }
     final allowed = supportedExtensionsFor(type).toSet();
     final directories = await fileStorage.initialize();
     final staged = <File>[];

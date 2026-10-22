@@ -19,7 +19,10 @@ enum ConversionType {
   txtToPdf,
 
   /// Extracts text content from a PDF document into a plain text (.txt) format.
-  pdfToTxt;
+  pdfToTxt,
+
+  /// Merges two or more PDF documents in the selected order.
+  pdfMerge;
 
   /// User-friendly display label suitable for presentation in UI.
   String get displayName {
@@ -38,6 +41,8 @@ enum ConversionType {
         return 'TXT to PDF';
       case ConversionType.pdfToTxt:
         return 'PDF to TXT';
+      case ConversionType.pdfMerge:
+        return 'Merge PDFs';
     }
   }
 
@@ -58,9 +63,20 @@ enum ConversionType {
         return 'png';
       case ConversionType.pdfToTxt:
         return 'txt';
+      case ConversionType.pdfMerge:
+        return 'pdf';
     }
   }
 
   /// Whether this conversion type supports or requires multiple input files.
-  bool get requiresMultipleInputs => this == ConversionType.multipleImagesToPdf;
+  bool get requiresMultipleInputs =>
+      this == ConversionType.multipleImagesToPdf ||
+      this == ConversionType.pdfMerge;
+
+  /// Minimum number of input files accepted by this conversion.
+  int get minimumInputCount =>
+      this == ConversionType.multipleImagesToPdf ||
+          this == ConversionType.pdfMerge
+      ? 2
+      : 1;
 }

@@ -408,6 +408,7 @@ class SqliteLibraryManager implements LibraryManager {
     ConversionType.pdfToImages => 'pdf_to_images',
     ConversionType.txtToPdf => 'txt_to_pdf',
     ConversionType.pdfToTxt => 'pdf_to_txt',
+    ConversionType.pdfMerge => 'pdf_merge',
   };
 
   static ConversionType? _conversionTypeFromKey(String? value) =>
@@ -420,6 +421,7 @@ class SqliteLibraryManager implements LibraryManager {
         'pdf_to_images' => ConversionType.pdfToImages,
         'txt_to_pdf' => ConversionType.txtToPdf,
         'pdf_to_txt' => ConversionType.pdfToTxt,
+        'pdf_merge' => ConversionType.pdfMerge,
         _ => throw const LocalDatabaseException(
           'Database contains an unknown conversion type.',
         ),

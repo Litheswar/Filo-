@@ -12,6 +12,7 @@ import 'package:filo/models/conversion_type.dart';
 import 'package:filo/models/file_record.dart';
 import 'package:filo/services/conversion/converter_interface.dart';
 import 'package:filo/services/conversion/pdf_creator.dart';
+import 'package:filo/services/conversion/pdf_merger.dart';
 import 'package:filo/services/conversion/pdf_text_extractor.dart';
 import 'package:filo/services/platform/file_export_service.dart';
 import 'package:filo/services/platform/file_picker_service.dart';
@@ -24,6 +25,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdfrx/pdfrx.dart' as pdfrx;
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -45,6 +47,12 @@ class _PickerAdapter implements FilePickerAdapter {
     pickCount++;
     return sources;
   }
+}
+
+Future<List<int>> _pdfBytes(String content) async {
+  final document = pw.Document()
+    ..addPage(pw.Page(build: (_) => pw.Center(child: pw.Text(content))));
+  return document.save();
 }
 
 class _FixtureConverter implements ConverterInterface {
@@ -97,6 +105,15 @@ class _FixtureConverter implements ConverterInterface {
           );
         final output = File(
           '${directory.path}${Platform.pathSeparator}created.pdf',
+        )..writeAsBytesSync(await document.save());
+        return ConversionResult.success(jobId: job.id, outputPath: output.path);
+      case ConversionType.pdfMerge:
+        final document = pw.Document()
+          ..addPage(
+            pw.Page(build: (_) => pw.Center(child: pw.Text('Merged PDF'))),
+          );
+        final output = File(
+          '${directory.path}${Platform.pathSeparator}merged.pdf',
         )..writeAsBytesSync(await document.save());
         return ConversionResult.success(jobId: job.id, outputPath: output.path);
       default:
@@ -430,6 +447,42 @@ void main() {
     expect(preview.isSuccess, isTrue);
     expect(preview.text, contains('A local note'));
     expect(await activities.getActivities(), hasLength(2));
+  });
+
+  test('PDF merge registers the output in Library and Activity', () async {
+    final first = await _pdfBytes('MERGE_FIRST');
+    final second = await _pdfBytes('MERGE_SECOND');
+    pickerAdapter.sources = [
+      source('first.pdf', first),
+      source('second.pdf', second),
+    ];
+
+    final outcome = await service(converters: [PdfMerger()])
+        .convert(ConversionType.pdfMerge);
+
+    expect(outcome.status, DocumentConversionStatus.success);
+    final record = outcome.workflowOutcome!.documents.single;
+    expect(record.extension, 'pdf');
+    expect(record.fileName, endsWith('first_merged.pdf'));
+    final stored = await pdfrx.PdfDocument.openFile(record.localPath);
+    try {
+      expect(stored.pages, hasLength(2));
+      expect(
+        (await stored.pages[0].loadStructuredText()).fullText,
+        contains('MERGE_FIRST'),
+      );
+      expect(
+        (await stored.pages[1].loadStructuredText()).fullText,
+        contains('MERGE_SECOND'),
+      );
+    } finally {
+      await stored.dispose();
+    }
+    final history = await activities.getActivities();
+    expect(history, hasLength(1));
+    expect(history.single.isSuccess, isTrue);
+    expect(history.single.conversionType, ConversionType.pdfMerge);
+    expect(history.single.outputName, record.fileName);
   });
 
   test('cancellation, conversion failure, and persistence failure clean staged inputs', () async {

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 
+import '../models/conversion_job.dart';
 import '../models/conversion_type.dart';
 import '../services/platform/file_picker_service.dart';
 import 'conversion_workflow.dart';
@@ -82,6 +83,7 @@ class DocumentConversionService {
   /// This lets the UI show selected filenames and wait for explicit consent.
   Future<DocumentConversionOutcome> convertSelection(
     PickedInputSelection selection, {
+    List<String>? inputPaths,
     String? requestedOutputName,
     String? outputDirectory,
   }) async {
@@ -96,8 +98,17 @@ class DocumentConversionService {
             .createConversionTemporaryDirectory();
         effectiveOutputDirectory = ownedOutputDirectory.path;
       }
-      final job = selection.createJob(
+      final selectedPaths = inputPaths ?? selection.inputPaths;
+      final availablePaths = selection.inputPaths.toSet();
+      if (selectedPaths.length < selection.conversionType.minimumInputCount ||
+          selectedPaths.toSet().length != selectedPaths.length ||
+          selectedPaths.any((path) => !availablePaths.contains(path))) {
+        throw const FormatException('Invalid staged input selection.');
+      }
+      final job = ConversionJob(
         id: _jobIdGenerator(),
+        inputPaths: selectedPaths,
+        conversionType: selection.conversionType,
         requestedOutputName: requestedOutputName,
         outputDirectory: effectiveOutputDirectory,
       );

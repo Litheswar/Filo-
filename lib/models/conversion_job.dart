@@ -7,8 +7,7 @@ class ConversionJob {
 
   /// Ordered list of input file paths to be converted.
   /// For single-file conversions, this list contains exactly one path.
-  /// For multiple-image conversions (e.g. [ConversionType.multipleImagesToPdf]),
-  /// this contains one or more image file paths in target sequence.
+  /// For multi-input conversions, this contains the ordered source paths.
   final List<String> inputPaths;
 
   /// The type of conversion requested.
@@ -53,8 +52,15 @@ class ConversionJob {
         );
       }
     }
-    if (conversionType != ConversionType.multipleImagesToPdf &&
-        inputPaths.length > 1) {
+    if (conversionType.requiresMultipleInputs &&
+        inputPaths.length < conversionType.minimumInputCount) {
+      throw ArgumentError.value(
+        inputPaths.length,
+        'inputPaths',
+        'Conversion type ${conversionType.name} requires at least ${conversionType.minimumInputCount} input files',
+      );
+    }
+    if (!conversionType.requiresMultipleInputs && inputPaths.length > 1) {
       throw ArgumentError.value(
         inputPaths.length,
         'inputPaths',

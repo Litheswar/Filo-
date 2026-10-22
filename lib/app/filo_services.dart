@@ -9,6 +9,7 @@ import '../application/sqlite_library_manager.dart';
 import '../services/conversion/image_converter.dart';
 import '../services/conversion/pdf_creator.dart';
 import '../services/conversion/pdf_renderer.dart';
+import '../services/conversion/pdf_merger.dart';
 import '../services/conversion/pdf_text_extractor.dart';
 import '../services/platform/file_export_service.dart';
 import '../services/platform/file_picker_service.dart';
@@ -111,6 +112,7 @@ class FiloServices {
           ImageConverter(),
           PdfCreator(),
           PdfRenderer(),
+          PdfMerger(),
           PdfTextExtractor(),
         ]);
     final workflow = ConversionWorkflow(

@@ -58,7 +58,7 @@ void main() {
       services.documentConversionService.conversionWorkflow,
       same(services.conversionWorkflow),
     );
-    expect(services.conversionManager.registeredConverters, hasLength(4));
+    expect(services.conversionManager.registeredConverters, hasLength(5));
   });
 
   testWidgets('initializes once and shows the library shell', (tester) async {
