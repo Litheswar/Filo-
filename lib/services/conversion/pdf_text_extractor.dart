@@ -180,7 +180,7 @@ class PdfTextExtractor implements ConverterInterface {
         job.outputDirectory ?? File(job.primaryInputPath).parent.path;
     final baseName = job.requestedOutputName?.trim().isNotEmpty == true
         ? _fileManager.extractBaseName(job.requestedOutputName!)
-        : '${_fileManager.extractBaseName(job.primaryInputPath)}_extracted';
+        : '${_fileManager.extractBaseName(job.inputFileNames.first)}_extracted';
     final inputPath = File(job.primaryInputPath).absolute.path.toLowerCase();
 
     try {

@@ -11,8 +11,10 @@ import 'package:filo/models/conversion_result.dart';
 import 'package:filo/models/conversion_type.dart';
 import 'package:filo/models/file_record.dart';
 import 'package:filo/services/conversion/converter_interface.dart';
+import 'package:filo/services/conversion/image_converter.dart';
 import 'package:filo/services/conversion/pdf_creator.dart';
 import 'package:filo/services/conversion/pdf_merger.dart';
+import 'package:filo/services/conversion/pdf_renderer.dart';
 import 'package:filo/services/conversion/pdf_text_extractor.dart';
 import 'package:filo/services/platform/file_export_service.dart';
 import 'package:filo/services/platform/file_picker_service.dart';
@@ -53,6 +55,18 @@ Future<List<int>> _pdfBytes(String content) async {
   final document = pw.Document()
     ..addPage(pw.Page(build: (_) => pw.Center(child: pw.Text(content))));
   return document.save();
+}
+
+List<int> _jpegBytes() {
+  final image = img.Image(width: 8, height: 8);
+  img.fill(image, color: img.ColorRgb8(180, 60, 40));
+  return img.encodeJpg(image);
+}
+
+List<int> _pngBytes() {
+  final image = img.Image(width: 8, height: 8);
+  img.fill(image, color: img.ColorRgb8(30, 150, 80));
+  return img.encodePng(image);
 }
 
 class _FixtureConverter implements ConverterInterface {
@@ -448,6 +462,126 @@ void main() {
     expect(preview.text, contains('A local note'));
     expect(await activities.getActivities(), hasLength(2));
   });
+
+  test(
+    'picked original names reach physical files, Library, and Activity',
+    () async {
+      final sourceDirectory = Directory('${root.path}/picked originals')
+        ..createSync();
+      final originalFiles = <File>[];
+
+      Future<FileRecord> convertPicked({
+        required ConversionType type,
+        required List<(String, List<int>)> inputs,
+        required ConverterInterface converter,
+        required List<String> expectedNames,
+      }) async {
+        final files = <File>[];
+        for (final (name, bytes) in inputs) {
+          final file = File(
+            '${sourceDirectory.path}${Platform.pathSeparator}$name',
+          )..writeAsBytesSync(bytes);
+          files.add(file);
+          if (!originalFiles.contains(file)) originalFiles.add(file);
+        }
+        final inputBytes = await Future.wait(
+          files.map((file) => file.readAsBytes()),
+        );
+        pickerAdapter.sources = [
+          for (var i = 0; i < inputs.length; i++)
+            PickerFileSource(
+              name: inputs[i].$1,
+              openRead: () =>
+                  files[i].openRead().map((chunk) => Uint8List.fromList(chunk)),
+            ),
+        ];
+        final outcome = await service(converters: [converter]).convert(type);
+        expect(outcome.isSuccess, isTrue, reason: outcome.errorDescription);
+        final records = outcome.workflowOutcome!.documents;
+        expect(records.map((record) => record.fileName), expectedNames);
+        expect(
+          records.map((record) => File(record.localPath).uri.pathSegments.last),
+          expectedNames,
+        );
+        for (final record in records) {
+          expect(
+            (await library.getRecordById(record.id))?.fileName,
+            record.fileName,
+          );
+          final activity = (await activities.getActivities()).firstWhere(
+            (entry) => entry.outputNames.contains(record.fileName),
+          );
+          expect(activity.outputNames, contains(record.fileName));
+        }
+        expect(
+          await Future.wait(files.map((file) => file.readAsBytes())),
+          inputBytes,
+        );
+        return records.first;
+      }
+
+      final pdfBytes = await _pdfBytes('Application form local content');
+      final applicationForm = await convertPicked(
+        type: ConversionType.pdfToTxt,
+        inputs: [('ApplicationForm.pdf', pdfBytes)],
+        converter: PdfTextExtractor(),
+        expectedNames: ['ApplicationForm.txt'],
+      );
+      expect(
+        await File(applicationForm.localPath).readAsString(),
+        contains('Application form local content'),
+      );
+
+      final collision = await convertPicked(
+        type: ConversionType.pdfToTxt,
+        inputs: [('ApplicationForm.pdf', pdfBytes)],
+        converter: PdfTextExtractor(),
+        expectedNames: ['ApplicationForm_1.txt'],
+      );
+      expect(await File(collision.localPath).exists(), isTrue);
+
+      await convertPicked(
+        type: ConversionType.txtToPdf,
+        inputs: [('Notes.txt', 'Local note'.codeUnits)],
+        converter: PdfCreator(),
+        expectedNames: ['Notes.pdf'],
+      );
+      await convertPicked(
+        type: ConversionType.jpgToPng,
+        inputs: [('Photo.jpg', _jpegBytes())],
+        converter: ImageConverter(),
+        expectedNames: ['Photo.png'],
+      );
+      await convertPicked(
+        type: ConversionType.pngToJpg,
+        inputs: [('Photo.png', _pngBytes())],
+        converter: ImageConverter(),
+        expectedNames: ['Photo.jpg'],
+      );
+      await convertPicked(
+        type: ConversionType.singleImageToPdf,
+        inputs: [('Portrait.jpg', _jpegBytes())],
+        converter: PdfCreator(),
+        expectedNames: ['Portrait.pdf'],
+      );
+      await convertPicked(
+        type: ConversionType.multipleImagesToPdf,
+        inputs: [('AlbumCover.jpg', _jpegBytes()), ('detail.png', _pngBytes())],
+        converter: PdfCreator(),
+        expectedNames: ['AlbumCover.pdf'],
+      );
+      await convertPicked(
+        type: ConversionType.pdfToImages,
+        inputs: [('Plan.pdf', pdfBytes)],
+        converter: PdfRenderer(),
+        expectedNames: ['Plan_page_1.png'],
+      );
+      expect(
+        await Future.wait(originalFiles.map((file) => file.exists())),
+        everyElement(isTrue),
+      );
+    },
+  );
 
   test('PDF merge registers the output in Library and Activity', () async {
     final first = await _pdfBytes('MERGE_FIRST');

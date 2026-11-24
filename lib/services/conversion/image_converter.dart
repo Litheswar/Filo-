@@ -117,18 +117,8 @@ class ImageConverter implements ConverterInterface {
       );
     }
 
-    // 5. Determine target extension and output path
+    // 5. Determine the target extension and encode before reserving a path.
     final targetExtension = job.conversionType.defaultOutputExtension;
-    final outputPath = _resolveOutputPath(job, targetExtension);
-
-    // Guard against overwriting input file directly
-    if (_isSameFilePath(inputPath, outputPath)) {
-      return ConversionResult.failure(
-        jobId: job.id,
-        errorMessage: 'Output path cannot be identical to source path',
-        duration: stopwatch.elapsed,
-      );
-    }
 
     // 6. Encode image to target format
     final List<int> encodedBytes;
@@ -160,8 +150,10 @@ class ImageConverter implements ConverterInterface {
       );
     }
 
-    // 7. Write to output file
-    final outputFile = File(outputPath);
+    // 7. Exclusively reserve a collision-safe output only after encoding works.
+    final outputFile = await _reserveOutputFile(job, targetExtension);
+
+    // 8. Write to output file.
     try {
       // Ensure target directory exists
       final parentDir = outputFile.parent;
@@ -171,6 +163,11 @@ class ImageConverter implements ConverterInterface {
 
       await outputFile.writeAsBytes(encodedBytes, flush: true);
     } catch (e) {
+      try {
+        if (await outputFile.exists()) await outputFile.delete();
+      } catch (_) {
+        // The reserved output is ours; cleanup is best effort on write failure.
+      }
       return ConversionResult.failure(
         jobId: job.id,
         errorMessage: 'Failed to write output file: $e',
@@ -178,7 +175,7 @@ class ImageConverter implements ConverterInterface {
       );
     }
 
-    // 8. Strict post-conversion verification: exists, non-empty, and decodable
+    // 9. Strict post-conversion verification: exists, non-empty, and decodable.
     final verificationError = await _verifyOutputFile(
       outputFile,
       job.conversionType,
@@ -270,19 +267,37 @@ class ImageConverter implements ConverterInterface {
   }
 
   /// Resolves the destination output file path.
-  String _resolveOutputPath(ConversionJob job, String targetExtension) {
+  Future<File> _reserveOutputFile(
+    ConversionJob job,
+    String targetExtension,
+  ) async {
     final inputPath = job.primaryInputPath;
     final parentDir = job.outputDirectory ?? File(inputPath).parent.path;
 
     final baseName = job.requestedOutputName?.trim().isNotEmpty == true
         ? _fileManager.extractBaseName(job.requestedOutputName!)
-        : '${_fileManager.extractBaseName(inputPath)}_converted';
+        : '${_fileManager.extractBaseName(job.inputFileNames.first)}_converted';
 
-    return _fileManager.buildOutputPath(
-      directory: parentDir,
-      baseName: baseName,
-      extension: targetExtension,
-    );
+    final directory = Directory(parentDir);
+    if (!await directory.exists()) await directory.create(recursive: true);
+    for (var suffix = 0; ; suffix++) {
+      final candidateBase = suffix == 0 ? baseName : '${baseName}_$suffix';
+      final path = _fileManager.buildOutputPath(
+        directory: parentDir,
+        baseName: candidateBase,
+        extension: targetExtension,
+      );
+      if (_isSameFilePath(inputPath, path)) continue;
+      final candidate = File(path);
+      try {
+        return await candidate.create(exclusive: true);
+      } on FileSystemException {
+        if (await FileSystemEntity.type(path, followLinks: false) ==
+            FileSystemEntityType.notFound) {
+          rethrow;
+        }
+      }
+    }
   }
 
   bool _isSameFilePath(String path1, String path2) {

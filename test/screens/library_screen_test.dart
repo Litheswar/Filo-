@@ -220,7 +220,8 @@ void main() {
   testWidgets('opens bounded TXT preview and provides missing-thumbnail icon', (
     tester,
   ) async {
-    await addDocument(tester, 'note.txt', contents: 'Preview text from file');
+    const previewText = 'Preview text from file';
+    await addDocument(tester, 'note.txt', contents: previewText);
     await addDocument(tester, 'broken.png', contents: 'not image data');
     await mount(tester);
 
@@ -230,6 +231,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('note.txt'));
     await tester.pumpAndSettle();
+    expect(find.byType(DocumentPreviewScreen), findsOneWidget);
+    expect(find.text('note.txt'), findsOneWidget);
     expect(find.text('Loading text preview…'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();

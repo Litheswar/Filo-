@@ -79,6 +79,7 @@ class PickedInputSelection {
   }) => ConversionJob(
     id: id,
     inputPaths: inputPaths,
+    inputFileNames: files.map((file) => file.name).toList(growable: false),
     conversionType: conversionType,
     requestedOutputName: requestedOutputName,
     outputDirectory: outputDirectory,

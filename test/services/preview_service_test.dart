@@ -277,7 +277,7 @@ void main() {
     final result = await service.preview(file);
     expect(result.isSuccess, isTrue);
     expect(result.truncated, isTrue);
-    expect(result.text, contains('�'));
+    expect(result.text, 'A');
     expect(result.displayText, contains('preview truncated'));
 
     final full = await TextPreviewService(maxBytes: 100).preview(file);

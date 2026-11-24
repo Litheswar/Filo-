@@ -108,9 +108,15 @@ class DocumentConversionService {
       }
       final effectiveRequestedOutputName =
           requestedOutputName ?? _defaultOutputName(selection, selectedPaths);
+      final selectedFilesByPath = {
+        for (final file in selection.files) file.path: file,
+      };
       final job = ConversionJob(
         id: _jobIdGenerator(),
         inputPaths: selectedPaths,
+        inputFileNames: selectedPaths
+            .map((path) => selectedFilesByPath[path]!.name)
+            .toList(growable: false),
         conversionType: selection.conversionType,
         requestedOutputName: effectiveRequestedOutputName,
         outputDirectory: effectiveOutputDirectory,
@@ -169,12 +175,20 @@ class DocumentConversionService {
     PickedInputSelection selection,
     List<String> orderedPaths,
   ) {
-    if (selection.conversionType != ConversionType.pdfMerge) return null;
     final firstInput = selection.files.firstWhere(
       (file) => file.path == orderedPaths.first,
     );
     final baseName = BaseFileManager().extractBaseName(firstInput.name);
-    return '${baseName}_merged.pdf';
+    return switch (selection.conversionType) {
+      ConversionType.pdfToTxt => '$baseName.txt',
+      ConversionType.txtToPdf ||
+      ConversionType.singleImageToPdf => '$baseName.pdf',
+      ConversionType.jpgToPng => '$baseName.png',
+      ConversionType.pngToJpg => '$baseName.jpg',
+      ConversionType.pdfToImages => baseName,
+      ConversionType.pdfMerge => '${baseName}_merged.pdf',
+      ConversionType.multipleImagesToPdf => '$baseName.pdf',
+    };
   }
 
   static String _newJobId() =>

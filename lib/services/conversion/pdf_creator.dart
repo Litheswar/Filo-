@@ -298,7 +298,7 @@ class PdfCreator implements ConverterInterface {
 
     final initialBase = job.requestedOutputName?.trim().isNotEmpty == true
         ? _fileManager.extractBaseName(job.requestedOutputName!)
-        : '${_fileManager.extractBaseName(job.primaryInputPath)}_converted';
+        : '${_fileManager.extractBaseName(job.inputFileNames.first)}_converted';
 
     var candidate = _fileManager.buildOutputPath(
       directory: parentDir,

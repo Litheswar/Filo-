@@ -203,7 +203,7 @@ class PdfMerger implements ConverterInterface {
     final requested = job.requestedOutputName?.trim();
     final initialBase = requested != null && requested.isNotEmpty
         ? _fileManager.extractBaseName(requested)
-        : '${_fileManager.extractBaseName(job.primaryInputPath)}_merged';
+        : '${_fileManager.extractBaseName(job.inputFileNames.first)}_merged';
     for (var index = 0; index < 10000; index++) {
       final baseName = index == 0 ? initialBase : '${initialBase}_$index';
       final candidate = File(

@@ -293,26 +293,29 @@ void main() {
       );
     });
 
-    test('fails if output path would overwrite source file', () async {
-      // Create a file already named test.png and try to output directly into test.png
-      final sourceFile = createTestPng('collide.png');
+    test(
+      'uses a collision-safe name when requested output matches source',
+      () async {
+        // A matching source path is preserved; the output receives a suffix.
+        final sourceFile = createTestPng('collide.png');
+        final originalBytes = await sourceFile.readAsBytes();
 
-      final job = ConversionJob(
-        id: 'job_collision',
-        inputPaths: [sourceFile.path],
-        conversionType: ConversionType.jpgToPng,
-        outputDirectory: tempDir.path,
-        requestedOutputName: 'collide', // Would resolve to collide.png
-      );
+        final job = ConversionJob(
+          id: 'job_collision',
+          inputPaths: [sourceFile.path],
+          conversionType: ConversionType.jpgToPng,
+          outputDirectory: tempDir.path,
+          requestedOutputName: 'collide', // Would resolve to collide.png
+        );
 
-      final result = await converter.convert(job);
+        final result = await converter.convert(job);
 
-      expect(result.isSuccess, isFalse);
-      expect(
-        result.errorMessage,
-        contains('cannot be identical to source path'),
-      );
-    });
+        expect(result.isSuccess, isTrue);
+        expect(result.outputPath, endsWith('collide_1.png'));
+        expect(await File(result.outputPath!).exists(), isTrue);
+        expect(await sourceFile.readAsBytes(), originalBytes);
+      },
+    );
   });
 
   group('ConversionManager Integration', () {

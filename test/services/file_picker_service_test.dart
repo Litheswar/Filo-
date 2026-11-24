@@ -83,6 +83,7 @@ void main() {
       final job = selection.createJob(id: 'picked-job');
       expect(job.conversionType, ConversionType.jpgToPng);
       expect(job.inputPaths, selection.inputPaths);
+      expect(job.inputFileNames, ['photo.JPG']);
       await selection.dispose();
       expect(await File(selection.inputPaths.single).exists(), isFalse);
     },
@@ -110,6 +111,10 @@ void main() {
         selection.createJob(id: 'ordered').inputPaths,
         selection.inputPaths,
       );
+      expect(selection.createJob(id: 'ordered-names').inputFileNames, [
+        'first.png',
+        'second.jpeg',
+      ]);
       await selection.dispose();
       expect(
         await Future.wait(

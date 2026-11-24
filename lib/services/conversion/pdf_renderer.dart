@@ -301,7 +301,7 @@ class PdfRenderer implements ConverterInterface {
 
     final baseName = job.requestedOutputName?.trim().isNotEmpty == true
         ? _fileManager.extractBaseName(job.requestedOutputName!)
-        : _fileManager.extractBaseName(job.primaryInputPath);
+        : _fileManager.extractBaseName(job.inputFileNames.first);
 
     var candidateBase = baseName;
     var suffixCounter = 1;

@@ -48,7 +48,10 @@ class TextPreviewService {
         if (bytes.length > maxBytes) break;
       }
       final truncated = bytes.length > maxBytes;
-      if (truncated) bytes.removeRange(maxBytes, bytes.length);
+      if (truncated) {
+        bytes.removeRange(maxBytes, bytes.length);
+        _removeIncompleteUtf8Suffix(bytes);
+      }
       return TextPreviewResult(
         isSuccess: true,
         text: utf8.decode(bytes, allowMalformed: true),
@@ -72,5 +75,29 @@ class TextPreviewService {
     final basename = path.replaceAll(r'\', '/').split('/').last;
     final dot = basename.lastIndexOf('.');
     return dot < 0 ? '' : basename.substring(dot + 1).toLowerCase();
+  }
+
+  /// Avoid turning a valid UTF-8 character split at the preview boundary into
+  /// a replacement glyph. Malformed sequences elsewhere still decode safely.
+  void _removeIncompleteUtf8Suffix(List<int> bytes) {
+    if (bytes.isEmpty) return;
+    var start = bytes.length - 1;
+    while (start >= 0 && (bytes[start] & 0xc0) == 0x80) {
+      start--;
+    }
+    if (start < 0) return;
+    final lead = bytes[start];
+    final expectedLength = lead < 0x80
+        ? 1
+        : lead >= 0xc2 && lead <= 0xdf
+        ? 2
+        : lead >= 0xe0 && lead <= 0xef
+        ? 3
+        : lead >= 0xf0 && lead <= 0xf4
+        ? 4
+        : 1;
+    if (bytes.length - start < expectedLength) {
+      bytes.removeRange(start, bytes.length);
+    }
   }
 }

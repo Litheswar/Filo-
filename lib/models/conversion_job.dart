@@ -10,6 +10,11 @@ class ConversionJob {
   /// For multi-input conversions, this contains the ordered source paths.
   final List<String> inputPaths;
 
+  /// Original user-visible names, in the same order as [inputPaths].
+  /// These are kept separately because picker-backed paths may be staged under
+  /// private temporary names before conversion.
+  final List<String> inputFileNames;
+
   /// The type of conversion requested.
   final ConversionType conversionType;
 
@@ -28,10 +33,14 @@ class ConversionJob {
     required this.id,
     required List<String> inputPaths,
     required this.conversionType,
+    List<String>? inputFileNames,
     this.requestedOutputName,
     this.outputDirectory,
     DateTime? createdAt,
   }) : inputPaths = List.unmodifiable(inputPaths),
+       inputFileNames = List.unmodifiable(
+         inputFileNames ?? inputPaths.map(_basename).toList(growable: false),
+       ),
        createdAt = createdAt ?? DateTime.now() {
     if (id.trim().isEmpty) {
       throw ArgumentError.value(id, 'id', 'Job ID cannot be empty');
@@ -51,6 +60,14 @@ class ConversionJob {
           'Input file path cannot be empty or whitespace',
         );
       }
+    }
+    if (this.inputFileNames.length != inputPaths.length ||
+        this.inputFileNames.any((name) => name.trim().isEmpty)) {
+      throw ArgumentError.value(
+        this.inputFileNames,
+        'inputFileNames',
+        'Original input names must be non-empty and match input paths.',
+      );
     }
     if (conversionType.requiresMultipleInputs &&
         inputPaths.length < conversionType.minimumInputCount) {
@@ -95,11 +112,15 @@ class ConversionJob {
         other.requestedOutputName != requestedOutputName ||
         other.outputDirectory != outputDirectory ||
         other.createdAt != createdAt ||
-        other.inputPaths.length != inputPaths.length) {
+        other.inputPaths.length != inputPaths.length ||
+        other.inputFileNames.length != inputFileNames.length) {
       return false;
     }
     for (var i = 0; i < inputPaths.length; i++) {
-      if (inputPaths[i] != other.inputPaths[i]) return false;
+      if (inputPaths[i] != other.inputPaths[i] ||
+          inputFileNames[i] != other.inputFileNames[i]) {
+        return false;
+      }
     }
     return true;
   }
@@ -108,6 +129,7 @@ class ConversionJob {
   int get hashCode => Object.hash(
     id,
     Object.hashAll(inputPaths),
+    Object.hashAll(inputFileNames),
     conversionType,
     requestedOutputName,
     outputDirectory,
@@ -119,3 +141,5 @@ class ConversionJob {
     return 'ConversionJob(id: $id, type: ${conversionType.name}, inputs: ${inputPaths.length})';
   }
 }
+
+String _basename(String path) => path.replaceAll(r'\', '/').split('/').last;
