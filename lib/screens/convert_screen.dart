@@ -284,7 +284,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
                       : partial
                       ? Icons.warning_amber_rounded
                       : Icons.error_outline_rounded,
-                  color: successful ? FiloColors.green : FiloColors.warning,
+                  color: successful
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
                 ),
                 const SizedBox(width: FiloSpacing.sm),
                 Expanded(
@@ -722,11 +724,17 @@ class _ConversionChoice extends StatelessWidget {
     label: '${type.displayName}. ${_description(type)}',
     child: Card(
       key: ValueKey('choice-${type.name}'),
-      color: selected ? FiloColors.greenPale : null,
+      color: selected
+          ? Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF29483A)
+                : FiloColors.greenPale
+          : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(FiloRadii.control),
         side: BorderSide(
-          color: selected ? FiloColors.green : FiloColors.border,
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outline,
           width: selected ? 1.5 : 1,
         ),
       ),
@@ -739,7 +747,9 @@ class _ConversionChoice extends StatelessWidget {
             children: [
               Icon(
                 _icon(type),
-                color: selected ? FiloColors.green : FiloColors.mutedInk,
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: FiloSpacing.sm),
               Expanded(
@@ -759,9 +769,9 @@ class _ConversionChoice extends StatelessWidget {
                 ),
               ),
               if (selected)
-                const Icon(
+                Icon(
                   Icons.check_circle_rounded,
-                  color: FiloColors.green,
+                  color: Theme.of(context).colorScheme.primary,
                   size: 20,
                 ),
             ],
@@ -860,8 +870,12 @@ class _OutputRow extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 17,
-                  backgroundColor: FiloColors.greenPale,
-                  foregroundColor: FiloColors.greenDark,
+                  backgroundColor: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer,
+                  foregroundColor: Theme.of(context)
+                      .colorScheme
+                      .onPrimaryContainer,
                   child: Text('${index + 1}'),
                 ),
                 const SizedBox(width: FiloSpacing.sm),
@@ -942,7 +956,7 @@ class _InlineMessage extends StatelessWidget {
           size: 20,
           color: isError
               ? Theme.of(context).colorScheme.error
-              : FiloColors.mutedInk,
+              : Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: FiloSpacing.sm),
         Expanded(child: Text(message)),

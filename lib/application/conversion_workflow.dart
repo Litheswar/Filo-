@@ -46,6 +46,7 @@ class ConversionWorkflow {
     this.thumbnailService,
     this.onLibraryChanged,
     this.onActivityChanged,
+    this.onManagedStorageChanged,
     String Function()? idGenerator,
     DateTime Function()? clock,
   }) : _idGenerator = idGenerator ?? _newId,
@@ -58,6 +59,7 @@ class ConversionWorkflow {
   final ThumbnailService? thumbnailService;
   final void Function()? onLibraryChanged;
   final void Function()? onActivityChanged;
+  final void Function()? onManagedStorageChanged;
   final String Function() _idGenerator;
   final DateTime Function() _clock;
 
@@ -189,6 +191,7 @@ class ConversionWorkflow {
         );
       }
       onLibraryChanged?.call();
+      onManagedStorageChanged?.call();
       return ConversionWorkflowOutcome(
         status: ConversionWorkflowStatus.success,
         conversionResult: result,
@@ -236,6 +239,7 @@ class ConversionWorkflow {
         summary,
       );
       if (activityFailure != null) cleanupFailures.add(activityFailure);
+      if (createdFiles.isNotEmpty) onManagedStorageChanged?.call();
       final remaining = <String>[];
       for (final file in createdFiles) {
         try {

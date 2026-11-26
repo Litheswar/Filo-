@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:filo/screens/settings_screen.dart';
+import 'package:filo/application/activity_manager.dart';
+import 'package:filo/models/conversion_type.dart';
 import 'package:filo/services/storage/file_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,35 +41,63 @@ void main() {
             documentsBytes: 2,
             temporaryBytes: 1,
             thumbnailBytes: 3,
+            documentCount: 1,
+            documentBytesByType: {'pdf': 2},
+            metadataBytes: 4,
           ),
-          loadAppVersion: () async => '1.0.1 · Build 2',
+          loadAppVersion: () async => '1.0.1',
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Privacy'), findsOneWidget);
+    expect(find.text('Local by default'), findsOneWidget);
+    expect(
+      find.text(
+        'Your files stay on this device unless you export or share them.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('How Filo handles files'), findsOneWidget);
+    expect(find.text('Full privacy details'), findsOneWidget);
+    await tester.tap(find.text('Full privacy details'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('designed to happen locally'), findsOneWidget);
     expect(find.textContaining('destination you choose'), findsOneWidget);
     expect(
       find.textContaining('does not automatically upload'),
       findsOneWidget,
     );
-    expect(find.text('Documents'), findsOneWidget);
-    expect(find.text('2 B'), findsOneWidget);
+    expect(find.textContaining('does not require an account'), findsOneWidget);
+    expect(find.textContaining('not the same as encryption'), findsOneWidget);
+    expect(find.text('Converted documents'), findsOneWidget);
+    expect(find.text('2 B'), findsNWidgets(2));
     expect(find.text('Temporary files'), findsOneWidget);
     expect(find.text('1 B'), findsOneWidget);
     expect(find.text('Thumbnails'), findsOneWidget);
     expect(find.text('3 B'), findsOneWidget);
+    expect(find.text('1 managed Library outputs'), findsOneWidget);
+    expect(find.text('By file type'), findsOneWidget);
+    expect(find.text('PDF'), findsOneWidget);
+    expect(find.text('Database and settings'), findsOneWidget);
+    expect(find.text('Total Filo-managed storage'), findsOneWidget);
+    expect(find.text('10 B'), findsOneWidget);
     expect(
       find.textContaining('inside Filo-managed folders only'),
       findsOneWidget,
     );
-    expect(find.text('Filo'), findsOneWidget);
-    expect(find.text('Version 1.0.1 · Build 2'), findsOneWidget);
-    expect(find.textContaining('Library'), findsOneWidget);
-    expect(find.textContaining('Convert'), findsOneWidget);
-    expect(find.textContaining('Activity'), findsOneWidget);
+    expect(
+      find.text('Convert, read and manage documents locally on your device.'),
+      findsOneWidget,
+    );
+    expect(find.text('Version 1.0.1'), findsOneWidget);
+    expect(find.text('Getting started with Filo'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Supported formats'), findsOneWidget);
+    expect(find.text('JPG → PNG'), findsOneWidget);
+    expect(find.text('PDF → TXT'), findsOneWidget);
+    expect(find.textContaining('DOCX'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -202,6 +232,156 @@ void main() {
     expect(find.text('5 B'), findsOneWidget);
     changes.dispose();
   });
+
+  testWidgets('cleanup confirms reclaimed space and keeps Library documents', (
+    tester,
+  ) async {
+    final cleanupStorage = _CleanupFileStorage();
+
+    await tester.pumpWidget(
+      _app(
+        SettingsScreen(
+          fileStorage: cleanupStorage,
+          loadStorageUsage: () async => const ManagedStorageUsage(
+            documentsBytes: 3,
+            temporaryBytes: 2,
+            thumbnailBytes: 3,
+            documentCount: 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollIntoView(tester, find.text('Clear staged temporary files'));
+    await tester.tap(find.text('Clear staged temporary files'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('remove 2 B'), findsOneWidget);
+    expect(
+      find.textContaining('Library documents will not be deleted'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Active conversion folders'), findsOneWidget);
+    await tester.tap(find.text('Clear').last);
+    await tester.pumpAndSettle();
+    expect(cleanupStorage.temporaryCleanupCalls, 1);
+
+    await _scrollIntoView(tester, find.text('Clear thumbnail cache'));
+    await tester.tap(find.text('Clear thumbnail cache'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('remove 3 B'), findsOneWidget);
+    await tester.tap(find.text('Clear').last);
+    await tester.pumpAndSettle();
+    expect(cleanupStorage.cacheCleanupCalls, 1);
+  });
+
+  testWidgets('clears Activity history separately and preserves documents', (
+    tester,
+  ) async {
+    final directories = await storage.initialize();
+    final document = File('${directories.documents.path}/library.pdf')
+      ..writeAsBytesSync([1, 2, 3]);
+    final history = InMemoryActivityManager([
+      ActivityRecord(
+        id: 'activity-1',
+        jobId: 'job-1',
+        conversionType: ConversionType.jpgToPng,
+        isSuccess: true,
+      ),
+    ]);
+    var refreshed = false;
+
+    await tester.pumpWidget(
+      _app(
+        SettingsScreen(
+          fileStorage: storage,
+          loadStorageUsage: () async => const ManagedStorageUsage(
+            documentsBytes: 3,
+            temporaryBytes: 0,
+            thumbnailBytes: 0,
+            documentCount: 1,
+          ),
+          activityManager: history,
+          onActivityHistoryChanged: () => refreshed = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollIntoView(tester, find.text('Clear Activity history'));
+    await tester.tap(find.text('Clear Activity history'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('does not delete Library documents'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Clear history'));
+    await tester.pumpAndSettle();
+
+    expect(await history.getActivities(), isEmpty);
+    expect(refreshed, isTrue);
+    expect(await tester.runAsync(document.readAsBytes), [1, 2, 3]);
+  });
+
+  testWidgets('appearance selector reports selected theme changes', (
+    tester,
+  ) async {
+    ThemeMode? selected;
+    await tester.pumpWidget(
+      _app(
+        SettingsScreen(
+          fileStorage: storage,
+          loadStorageUsage: () async => const ManagedStorageUsage(
+            documentsBytes: 2,
+            temporaryBytes: 0,
+            thumbnailBytes: 0,
+            documentCount: 1,
+          ),
+          onThemeModeChanged: (mode) => selected = mode,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollIntoView(tester, find.text('Dark'));
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    expect(selected, ThemeMode.dark);
+  });
 }
 
 Widget _app(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+Future<void> _scrollIntoView(WidgetTester tester, Finder target) async {
+  final scrollable = find.byType(SingleChildScrollView).first;
+  final viewportHeight =
+      tester.view.physicalSize.height / tester.view.devicePixelRatio;
+  for (var attempt = 0; attempt < 12; attempt++) {
+    final rect = tester.getRect(target);
+    if (rect.top >= 0 && rect.bottom <= viewportHeight) return;
+    await tester.drag(
+      scrollable,
+      Offset(0, rect.bottom > viewportHeight ? -260 : 260),
+    );
+    await tester.pumpAndSettle();
+  }
+  fail('Could not bring $target into the Settings viewport.');
+}
+
+class _CleanupFileStorage extends FileStorage {
+  int temporaryCleanupCalls = 0;
+  int cacheCleanupCalls = 0;
+
+  @override
+  Future<int> getClearableTemporaryBytes() async => 2;
+
+  @override
+  Future<int> cleanTemporaryFiles() async {
+    temporaryCleanupCalls++;
+    return 1;
+  }
+
+  @override
+  Future<int> clearThumbnailCache() async {
+    cacheCleanupCalls++;
+    return 3;
+  }
+}

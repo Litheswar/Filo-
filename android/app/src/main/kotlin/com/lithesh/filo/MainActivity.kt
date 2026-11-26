@@ -17,9 +17,7 @@ class MainActivity : FlutterActivity() {
 
                 try {
                     val packageInfo: PackageInfo = packageManager.getPackageInfo(packageName, 0)
-                    @Suppress("DEPRECATION")
-                    val buildNumber = packageInfo.versionCode
-                    result.success("${packageInfo.versionName ?: "unknown"} · Build $buildNumber")
+                    result.success(packageInfo.versionName ?: "unknown")
                 } catch (error: Exception) {
                     result.error("version_unavailable", "Installed version could not be read.", null)
                 }

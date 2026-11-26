@@ -214,8 +214,8 @@ class _ActivityCard extends StatelessWidget {
                       : Icons.error_outline_rounded,
                   semanticLabel: status,
                   color: record.isSuccess
-                      ? FiloColors.green
-                      : FiloColors.warning,
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
                 ),
                 const SizedBox(width: FiloSpacing.sm),
                 Expanded(
@@ -312,7 +312,11 @@ class _MessageState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 48, color: FiloColors.mutedInk),
+          Icon(
+            icon,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: FiloSpacing.md),
           Text(title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: FiloSpacing.sm),

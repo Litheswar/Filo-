@@ -109,12 +109,15 @@ void main() {
     return record;
   }
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(WidgetTester tester, {VoidCallback? onConvert}) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData(useMaterial3: true),
         home: Scaffold(
-          body: LibraryScreen(services: services, onConvert: () {}),
+          body: LibraryScreen(
+            services: services,
+            onConvert: onConvert ?? () {},
+          ),
         ),
       ),
     );
@@ -124,11 +127,21 @@ void main() {
   testWidgets('shows persisted documents and a real empty state', (
     tester,
   ) async {
-    await mount(tester);
+    var conversionStarted = false;
+    await mount(tester, onConvert: () => conversionStarted = true);
     expect(screenLibrary.documentQueryCount, 1);
     expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filo logo'), findsOneWidget);
+    expect(find.text('Start a conversion'), findsOneWidget);
+    await tester.tap(find.text('Start a conversion'));
+    expect(conversionStarted, isTrue);
     expect(find.textContaining('No matching'), findsNothing);
     expect(find.text('sample.pdf'), findsNothing);
+    expect(find.text('Local by default'), findsNothing);
+    expect(find.text('How Filo handles files'), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('All types'), findsOneWidget);
+    expect(find.text('All conversions'), findsOneWidget);
 
     await addDocument(tester, 'saved.txt');
     await tester.pumpAndSettle();

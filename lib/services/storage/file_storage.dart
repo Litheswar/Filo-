@@ -2,17 +2,35 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+class _DocumentStats {
+  const _DocumentStats({
+    required this.bytes,
+    required this.count,
+    required this.bytesByType,
+  });
+
+  final int bytes;
+  final int count;
+  final Map<String, int> bytesByType;
+}
+
 /// The app-private directories used by Filo for durable and temporary files.
 class FileStorageDirectories {
   const FileStorageDirectories({
     required this.documents,
     required this.thumbnails,
     required this.temporary,
+    this.metadata,
+    this.preferences,
+    this.pickerConsent,
   });
 
   final Directory documents;
   final Directory thumbnails;
   final Directory temporary;
+  final Directory? metadata;
+  final Directory? preferences;
+  final File? pickerConsent;
 }
 
 /// Basic metadata for a file that belongs to Filo's managed storage.
@@ -36,11 +54,22 @@ class ManagedStorageUsage {
     required this.documentsBytes,
     required this.temporaryBytes,
     required this.thumbnailBytes,
+    this.metadataBytes = 0,
+    this.documentCount = 0,
+    this.documentBytesByType = const {},
+    this.refreshedAt,
   });
 
   final int documentsBytes;
   final int temporaryBytes;
   final int thumbnailBytes;
+  final int metadataBytes;
+  final int documentCount;
+  final Map<String, int> documentBytesByType;
+  final DateTime? refreshedAt;
+
+  int get totalBytes =>
+      documentsBytes + temporaryBytes + thumbnailBytes + metadataBytes;
 }
 
 /// Error raised when a storage operation cannot safely complete.
@@ -61,15 +90,21 @@ class FileStorage {
   FileStorage({
     Future<Directory> Function()? documentsDirectoryProvider,
     Future<Directory> Function()? temporaryDirectoryProvider,
+    Future<Directory> Function()? supportDirectoryProvider,
     this.appDirectoryName = 'Filo',
   }) : _documentsDirectoryProvider =
            documentsDirectoryProvider ?? getApplicationDocumentsDirectory,
+       _supportDirectoryProvider =
+           supportDirectoryProvider ??
+           documentsDirectoryProvider ??
+           getApplicationSupportDirectory,
        _temporaryDirectoryProvider =
            temporaryDirectoryProvider ?? getTemporaryDirectory {
     _validateDirectoryName(appDirectoryName);
   }
 
   final Future<Directory> Function() _documentsDirectoryProvider;
+  final Future<Directory> Function() _supportDirectoryProvider;
   final Future<Directory> Function() _temporaryDirectoryProvider;
   final String appDirectoryName;
 
@@ -77,20 +112,29 @@ class FileStorage {
 
   /// Creates and returns Filo's documents, thumbnails, and temporary folders.
   Future<FileStorageDirectories> initialize() async {
+    final initialized = _directories;
+    if (initialized != null) return initialized;
     try {
       final docsBase = await _documentsDirectoryProvider();
       final tempBase = await _temporaryDirectoryProvider();
+      final supportBase = await _supportDirectoryProvider();
       final root = Directory(_join(docsBase.path, appDirectoryName));
       final tempRoot = Directory(_join(tempBase.path, appDirectoryName));
       final directories = FileStorageDirectories(
         documents: Directory(_join(root.path, 'documents')),
         thumbnails: Directory(_join(root.path, 'thumbnails')),
         temporary: Directory(_join(tempRoot.path, 'temp')),
+        metadata: Directory(_join(root.path, 'database')),
+        preferences: Directory(
+          _join(_join(supportBase.path, appDirectoryName), 'preferences'),
+        ),
+        pickerConsent: File(_join(supportBase.path, 'file_picker_consent')),
       );
       for (final directory in [
         directories.documents,
         directories.thumbnails,
         directories.temporary,
+        directories.preferences!,
       ]) {
         await directory.create(recursive: true);
       }
@@ -114,14 +158,129 @@ class FileStorage {
   Future<ManagedStorageUsage> getManagedStorageUsage() async {
     final directories = await _requireDirectories();
     try {
+      final documentStats = await _scanDocuments(directories.documents);
+      final metadataBytes =
+          await _directorySize(directories.preferences!) +
+          (directories.metadata != null && await directories.metadata!.exists()
+              ? await _directorySize(directories.metadata!)
+              : 0) +
+          (directories.pickerConsent != null &&
+                  await FileSystemEntity.type(
+                        directories.pickerConsent!.path,
+                        followLinks: false,
+                      ) ==
+                      FileSystemEntityType.file
+              ? (await directories.pickerConsent!.stat()).size
+              : 0);
       return ManagedStorageUsage(
-        documentsBytes: await _directorySize(directories.documents),
+        documentsBytes: documentStats.bytes,
         temporaryBytes: await _directorySize(directories.temporary),
         thumbnailBytes: await _directorySize(directories.thumbnails),
+        metadataBytes: metadataBytes,
+        documentCount: documentStats.count,
+        documentBytesByType: Map.unmodifiable(documentStats.bytesByType),
+        refreshedAt: DateTime.now(),
       );
     } on FileSystemException {
       throw const FileStorageException(
         'Managed storage information could not be read.',
+      );
+    }
+  }
+
+  Future<_DocumentStats> _scanDocuments(Directory directory) async {
+    var bytes = 0;
+    var count = 0;
+    final byType = <String, int>{};
+    final pending = <Future<void>>[];
+    Future<void> flush() async {
+      if (pending.isEmpty) return;
+      await Future.wait(pending);
+      pending.clear();
+    }
+
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is Directory) {
+        await flush();
+        final nested = await _scanDocuments(entity);
+        bytes += nested.bytes;
+        count += nested.count;
+        for (final entry in nested.bytesByType.entries) {
+          byType.update(
+            entry.key,
+            (value) => value + entry.value,
+            ifAbsent: () => entry.value,
+          );
+        }
+      } else if (entity is File &&
+          await FileSystemEntity.type(entity.path, followLinks: false) ==
+              FileSystemEntityType.file) {
+        pending.add(() async {
+          final size = (await entity.stat()).size;
+          bytes += size;
+          count++;
+          final name = entity.uri.pathSegments.last;
+          final dot = name.lastIndexOf('.');
+          final extension = dot < 0 || dot == name.length - 1
+              ? 'other'
+              : name.substring(dot + 1).toLowerCase();
+          byType.update(
+            extension,
+            (value) => value + size,
+            ifAbsent: () => size,
+          );
+        }());
+        if (pending.length >= 64) await flush();
+      }
+    }
+    await flush();
+    return _DocumentStats(bytes: bytes, count: count, bytesByType: byType);
+  }
+
+  /// Measures bytes belonging to reserved Filo temp files that cleanup removes.
+  Future<int> getClearableTemporaryBytes() async {
+    final directories = await _requireDirectories();
+    var bytes = 0;
+    try {
+      await for (final entity in directories.temporary.list(
+        followLinks: false,
+      )) {
+        if (entity is File &&
+            _basename(entity.path).startsWith('filo_tmp_') &&
+            await FileSystemEntity.type(entity.path, followLinks: false) ==
+                FileSystemEntityType.file) {
+          bytes += (await entity.stat()).size;
+        }
+      }
+      return bytes;
+    } on FileSystemException {
+      throw const FileStorageException(
+        'Filo temporary files could not be measured.',
+      );
+    }
+  }
+
+  /// Removes regular files only from Filo's thumbnail cache directory.
+  Future<int> clearThumbnailCache() async {
+    final directories = await _requireDirectories();
+    var bytesRemoved = 0;
+    try {
+      await for (final entity in directories.thumbnails.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File &&
+            await FileSystemEntity.type(entity.path, followLinks: false) ==
+                FileSystemEntityType.file) {
+          final size = (await entity.stat()).size;
+          await entity.delete();
+          bytesRemoved += size;
+        }
+      }
+      return bytesRemoved;
+    } on FileSystemException {
+      throw const FileStorageException(
+        'Filo thumbnail cache could not be cleared.',
       );
     }
   }

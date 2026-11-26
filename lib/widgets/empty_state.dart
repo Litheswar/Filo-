@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/filo_theme.dart';
+import 'filo_logo.dart';
 
 class EmptyState extends StatelessWidget {
   const EmptyState({
@@ -9,12 +10,14 @@ class EmptyState extends StatelessWidget {
     required this.title,
     required this.description,
     this.action,
+    this.useFiloLogo = false,
   });
 
   final IconData icon;
   final String title;
   final String description;
   final Widget? action;
+  final bool useFiloLogo;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -25,15 +28,22 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(
-                color: FiloColors.greenPale,
-                shape: BoxShape.circle,
+            if (useFiloLogo)
+              const FiloLogo(size: 88)
+            else
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 32,
+                ),
               ),
-              child: Icon(icon, color: FiloColors.green, size: 32),
-            ),
             const SizedBox(height: FiloSpacing.lg),
             Text(
               title,

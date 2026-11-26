@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../navigation/app_shell.dart';
 import '../screens/welcome_screen.dart';
+import '../services/storage/theme_preference_store.dart';
+import '../widgets/filo_logo.dart';
 import 'filo_services.dart';
 import 'filo_theme.dart';
 
 typedef FiloServicesInitializer = Future<FiloServices> Function();
 
 class FiloApp extends StatefulWidget {
-  const FiloApp({super.key, this.initializeServices = FiloServices.initialize});
+  const FiloApp({
+    super.key,
+    this.initializeServices = FiloServices.initialize,
+    this.themePreferenceStore,
+  });
 
   final FiloServicesInitializer initializeServices;
+  final ThemePreferenceStore? themePreferenceStore;
 
   @override
   State<FiloApp> createState() => _FiloAppState();
@@ -18,11 +25,25 @@ class FiloApp extends StatefulWidget {
 
 class _FiloAppState extends State<FiloApp> {
   late Future<FiloServices> _services;
+  late final ThemePreferenceStore _themePreferences;
+  ThemeMode _themeMode = ThemeMode.system;
 
   @override
   void initState() {
     super.initState();
+    _themePreferences = widget.themePreferenceStore ?? ThemePreferenceStore();
+    _loadThemeMode();
     _services = widget.initializeServices();
+  }
+
+  Future<void> _loadThemeMode() async {
+    final mode = await _themePreferences.read();
+    if (mounted) setState(() => _themeMode = mode);
+  }
+
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    setState(() => _themeMode = mode);
+    await _themePreferences.write(mode);
   }
 
   void _retryInitialization() {
@@ -37,6 +58,8 @@ class _FiloAppState extends State<FiloApp> {
     title: 'Filo',
     debugShowCheckedModeBanner: false,
     theme: FiloTheme.light,
+    darkTheme: FiloTheme.dark,
+    themeMode: _themeMode,
     onGenerateRoute: (settings) {
       if (settings.name == '/welcome') {
         return MaterialPageRoute<void>(
@@ -55,7 +78,11 @@ class _FiloAppState extends State<FiloApp> {
             if (snapshot.hasError || !snapshot.hasData) {
               return _InitializationErrorScreen(onRetry: _retryInitialization);
             }
-            return AppShell(services: snapshot.requireData);
+            return AppShell(
+              services: snapshot.requireData,
+              themeMode: _themeMode,
+              onThemeModeChanged: _setThemeMode,
+            );
           },
         ),
       );
@@ -73,7 +100,7 @@ class _InitializationScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _FiloMark(size: 64),
+            FiloLogo(size: 64),
             SizedBox(height: 20),
             Text('Getting Filo ready…'),
             SizedBox(height: 20),
@@ -123,27 +150,6 @@ class _InitializationErrorScreen extends StatelessWidget {
           ),
         ),
       ),
-    ),
-  );
-}
-
-class _FiloMark extends StatelessWidget {
-  const _FiloMark({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: FiloColors.greenPale,
-      borderRadius: BorderRadius.circular(size * 0.32),
-    ),
-    child: Icon(
-      Icons.description_rounded,
-      color: FiloColors.green,
-      size: size * 0.52,
     ),
   );
 }

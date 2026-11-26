@@ -28,6 +28,58 @@ abstract final class FiloRadii {
 }
 
 abstract final class FiloTheme {
+  static ThemeData get dark {
+    const background = Color(0xFF111815);
+    const surface = Color(0xFF1B2420);
+    const border = Color(0xFF34423B);
+    const primary = Color(0xFF7BC6A6);
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: FiloColors.green,
+          brightness: Brightness.dark,
+          surface: surface,
+        ).copyWith(
+          primary: primary,
+          onPrimary: const Color(0xFF062217),
+          secondary: const Color(0xFF9AD9BE),
+          surface: surface,
+          onSurface: const Color(0xFFE4ECE7),
+          outline: border,
+        );
+    final base = ThemeData(useMaterial3: true, colorScheme: scheme);
+    return base.copyWith(
+      scaffoldBackgroundColor: background,
+      textTheme: base.textTheme.apply(
+        bodyColor: const Color(0xFFE4ECE7),
+        displayColor: const Color(0xFFE4ECE7),
+      ),
+      cardTheme: CardThemeData(
+        color: surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FiloRadii.card),
+          side: const BorderSide(color: border),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: background,
+        foregroundColor: Color(0xFFE4ECE7),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 72,
+        backgroundColor: surface,
+        indicatorColor: const Color(0xFF29483A),
+        labelTextStyle: WidgetStateProperty.all(
+          const TextStyle(color: Color(0xFFD8E5DD)),
+        ),
+      ),
+      dividerColor: border,
+    );
+  }
+
   static ThemeData get light {
     final scheme =
         ColorScheme.fromSeed(

@@ -6,11 +6,19 @@ import '../screens/activity_screen.dart';
 import '../screens/convert_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/settings_screen.dart';
+import '../widgets/filo_logo.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.services});
+  const AppShell({
+    super.key,
+    required this.services,
+    this.themeMode = ThemeMode.system,
+    this.onThemeModeChanged,
+  });
 
   final FiloServices services;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -38,9 +46,14 @@ class _AppShellState extends State<AppShell> {
       ),
       SettingsScreen(
         fileStorage: widget.services.fileStorage,
+        activityManager: widget.services.activityManager,
         isActive: _selectedIndex == 3,
         managedStorageChanges: widget.services.managedStorageChanges,
+        onManagedStorageChanged: widget.services.notifyManagedStorageChanged,
         filePickerConsentStore: widget.services.filePickerConsentStore,
+        themeMode: widget.themeMode,
+        onThemeModeChanged: widget.onThemeModeChanged,
+        onActivityHistoryChanged: () => widget.services.activityChanges.value++,
       ),
     ];
     return PopScope(
@@ -52,7 +65,7 @@ class _AppShellState extends State<AppShell> {
         appBar: AppBar(
           title: Row(
             children: [
-              const _SmallMark(),
+              const FiloLogo(size: 30),
               const SizedBox(width: FiloSpacing.sm),
               Text(
                 ['Library', 'Convert', 'Activity', 'Settings'][_selectedIndex],
@@ -114,23 +127,4 @@ class _AppShellState extends State<AppShell> {
       _visitedDestinations.add(index);
     });
   }
-}
-
-class _SmallMark extends StatelessWidget {
-  const _SmallMark();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 30,
-    height: 30,
-    decoration: BoxDecoration(
-      color: FiloColors.greenPale,
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: const Icon(
-      Icons.description_rounded,
-      size: 18,
-      color: FiloColors.green,
-    ),
-  );
 }

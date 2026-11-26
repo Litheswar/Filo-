@@ -37,6 +37,7 @@ void main() {
     late SqliteLibraryManager library;
     late SqliteActivityManager activities;
     var id = 0;
+    var managedStorageChanges = 0;
 
     setUp(() async {
       root = await Directory.systemTemp.createTemp('filo_workflow_');
@@ -51,6 +52,7 @@ void main() {
       library = SqliteLibraryManager(database, fileStorage: storage);
       activities = SqliteActivityManager(database);
       id = 0;
+      managedStorageChanges = 0;
     });
 
     tearDown(() async {
@@ -74,6 +76,7 @@ void main() {
       libraryManager: library,
       activityManager: activities,
       thumbnailService: ThumbnailService(fileStorage: storage),
+      onManagedStorageChanged: () => managedStorageChanges++,
       idGenerator: () => 'id-${id++}',
       clock: () => DateTime.utc(2026, 1, 2),
     );
@@ -95,6 +98,7 @@ void main() {
 
         final outcome = await runner.run(job(input.path));
         expect(outcome.isSuccess, isTrue);
+        expect(managedStorageChanges, 1);
         expect(outcome.documents.map((record) => record.fileName), [
           'page-1.png',
           'page-2.png',

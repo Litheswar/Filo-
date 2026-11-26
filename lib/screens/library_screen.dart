@@ -157,10 +157,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     key: const ValueKey('library-count'),
                   ),
                   const SizedBox(height: FiloSpacing.md),
-                  _PrivacyNote(
-                    onAbout: () => Navigator.of(context).pushNamed('/welcome'),
-                  ),
-                  const SizedBox(height: FiloSpacing.md),
                   TextField(
                     controller: _searchController,
                     onChanged: _onSearchChanged,
@@ -296,9 +292,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       const Icon(Icons.folder_open_outlined, size: 24),
                       const SizedBox(width: FiloSpacing.sm),
-                      Text(
-                        'Loading your library…',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      Flexible(
+                        child: Text(
+                          'Loading your library…',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
                     ],
                   ),
@@ -333,6 +331,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   description: _hasFilters
                       ? 'Try changing or clearing your search and filters.'
                       : 'Documents you save from conversions will appear here.',
+                  useFiloLogo: !_hasFilters,
                   action: _hasFilters
                       ? TextButton(
                           onPressed: _clearFilters,
@@ -820,9 +819,13 @@ class _FileIcon extends StatelessWidget {
   final String extension;
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: FiloColors.greenPale,
+    color: Theme.of(context).colorScheme.primaryContainer,
     child: Center(
-      child: Icon(_fileIcon(extension), size: 38, color: FiloColors.green),
+      child: Icon(
+        _fileIcon(extension),
+        size: 38,
+        color: Theme.of(context).colorScheme.primary,
+      ),
     ),
   );
 }
@@ -1268,43 +1271,6 @@ class _PreviewError extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.all(FiloSpacing.page),
       child: Text(message, textAlign: TextAlign.center),
-    ),
-  );
-}
-
-class _PrivacyNote extends StatelessWidget {
-  const _PrivacyNote({required this.onAbout});
-  final VoidCallback onAbout;
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(FiloSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.lock_outline_rounded, color: FiloColors.green),
-          const SizedBox(width: FiloSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Local by default',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: FiloSpacing.xs),
-                const Text(
-                  'Your files stay on this device unless you export or share them.',
-                ),
-                TextButton(
-                  onPressed: onAbout,
-                  child: const Text('How Filo handles files'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     ),
   );
 }

@@ -127,6 +127,9 @@ class FiloServices {
       onActivityChanged: () {
         activityChanges.value++;
       },
+      onManagedStorageChanged: () {
+        managedStorageChanges.value++;
+      },
     );
     final picker =
         filePickerService ??

@@ -88,6 +88,52 @@ void main() {
     expect(usage.thumbnailBytes, 1);
   });
 
+  test(
+    'reports physical document count and extension byte breakdown',
+    () async {
+      final directories = await storage.initialize();
+      await File('${directories.documents.path}/first.PDF')
+          .writeAsBytes([1, 2]);
+      await File('${directories.documents.path}/photo.jpeg')
+          .writeAsBytes([3, 4, 5]);
+      await File('${directories.documents.path}/note.txt').writeAsBytes([6]);
+      final outside = File('${root.path}/outside.png')
+        ..writeAsBytesSync([7, 8, 9, 10]);
+
+      final usage = await storage.getManagedStorageUsage();
+
+      expect(await outside.exists(), isTrue);
+      expect(usage.documentCount, 3);
+      expect(usage.documentsBytes, 6);
+      expect(usage.documentBytesByType, {'pdf': 2, 'jpeg': 3, 'txt': 1});
+      expect(usage.refreshedAt, isNotNull);
+      expect(
+        usage.totalBytes,
+        usage.documentsBytes +
+            usage.temporaryBytes +
+            usage.thumbnailBytes +
+            usage.metadataBytes,
+      );
+    },
+  );
+
+  test(
+    'clears only managed thumbnail cache and preserves Library documents',
+    () async {
+      final directories = await storage.initialize();
+      final source = File('${root.path}/keep.pdf')..writeAsBytesSync([1, 2, 3]);
+      final document = await storage.copyToLibrary(source);
+      final thumbnail = File('${directories.thumbnails.path}/thumb.png')
+        ..writeAsBytesSync([4, 5]);
+      final usage = await storage.getManagedStorageUsage();
+
+      expect(usage.thumbnailBytes, 2);
+      expect(await storage.clearThumbnailCache(), 2);
+      expect(await thumbnail.exists(), isFalse);
+      expect(await document.readAsBytes(), [1, 2, 3]);
+    },
+  );
+
   test('renames without overwriting existing files', () async {
     await storage.initialize();
     final source = File('${root.path}/source.txt')..writeAsStringSync('source');
@@ -156,13 +202,19 @@ void main() {
         2,
         3,
       ], fileName: 'work.bin');
+      final active = await storage.createConversionTemporaryDirectory();
+      final activeFile = File('${active.path}/input.bin')
+        ..writeAsBytesSync([4, 5]);
       final unrelated = File('${directories.temporary.path}/other.tmp')
         ..writeAsStringSync('keep');
 
+      expect(await storage.getClearableTemporaryBytes(), 3);
       expect(await storage.cleanTemporaryFiles(), 1);
       expect(await temporary.exists(), isFalse);
+      expect(await activeFile.exists(), isTrue);
       expect(await unrelated.exists(), isTrue);
       expect(await permanent.readAsString(), 'library');
+      await storage.deleteConversionTemporaryDirectory(active);
     },
   );
 

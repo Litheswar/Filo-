@@ -33,6 +33,14 @@ void main() {
     expect(theme.navigationBarTheme.height, 72);
   });
 
+  test('dark theme keeps Material 3 with readable Filo color roles', () {
+    final theme = FiloTheme.dark;
+    expect(theme.useMaterial3, isTrue);
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.colorScheme.primary, isNot(FiloColors.green));
+    expect(theme.colorScheme.onSurface, isNot(theme.scaffoldBackgroundColor));
+  });
+
   test('application services share the configured storage and database', () {
     expect(services.libraryManager.localDatabase, same(services.localDatabase));
     expect(services.activityManager, isA<InMemoryActivityManager>());
@@ -76,6 +84,7 @@ void main() {
     expect(initializationCount, 1);
     expect(find.text('Your documents'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.bySemanticsLabel('Filo logo'), findsOneWidget);
   });
 
   testWidgets('defers Activity until first visit and reuses loaded state', (
@@ -145,16 +154,79 @@ void main() {
 
     await tester.tap(find.byTooltip('About local privacy'));
     await tester.pumpAndSettle();
-    expect(find.text('Documents, on your terms.'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Documents, on your terms.'), findsOneWidget);
+    for (var step = 0; step < 3; step++) {
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+    }
     expect(
       find.textContaining('Local storage is not the same as encryption.'),
       findsOneWidget,
     );
 
-    await tester.ensureVisible(find.text('Continue to Filo'));
-    await tester.tap(find.text('Continue to Filo'));
+    await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
     expect(find.text('Your documents'), findsOneWidget);
+  });
+
+  testWidgets('guided experience supports previous, swipe, and skip', (
+    tester,
+  ) async {
+    await tester.pumpWidget(FiloApp(initializeServices: () async => services));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('About local privacy'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Import your files'), findsOneWidget);
+    expect(find.text('1 of 6'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a conversion'), findsOneWidget);
+    await tester.tap(find.text('Previous'));
+    await tester.pumpAndSettle();
+    expect(find.text('Import your files'), findsOneWidget);
+    await tester.drag(find.byType(PageView), const Offset(-400, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a conversion'), findsOneWidget);
+
+    await tester.tap(find.text('Skip'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your documents'), findsOneWidget);
+  });
+
+  testWidgets('Settings privacy action opens the existing Filo explanation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(FiloApp(initializeServices: () async => services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('How Filo handles files'));
+    await tester.tap(find.text('How Filo handles files'));
+    await tester.pumpAndSettle();
+
+    for (var step = 0; step < 2; step++) {
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.textContaining('Documents, on your terms.'), findsOneWidget);
+    for (var step = 0; step < 3; step++) {
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+    }
+    expect(
+      find.textContaining('Local storage is not the same as encryption.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Finish'));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('Local by default'), findsOneWidget);
   });
 
   testWidgets('shows a loading state during service initialization', (
@@ -165,6 +237,7 @@ void main() {
       FiloApp(initializeServices: () => completer.future),
     );
     expect(find.text('Getting Filo ready…'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filo logo'), findsOneWidget);
 
     completer.complete(services);
     await tester.pumpAndSettle();
